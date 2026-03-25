@@ -205,7 +205,6 @@ function RegisterForm({
     try {
       const valid = await actor.verifyCode(email, code);
       if (valid) {
-        // Register as regular user (empty token = user role)
         await actor._initializeAccessControlWithSecret("");
         await actor.saveCallerUserProfile({ name });
         toast.success("Registration successful! Logging in...");
@@ -493,92 +492,128 @@ function ProductCard({ product, index }: { product: Product; index: number }) {
   );
 }
 
-function AdminTokenModal({
-  onClose,
+function AdminLoginScreen({
   onSuccess,
-}: { onClose: () => void; onSuccess: () => void }) {
+  onBack,
+}: { onSuccess: () => void; onBack: () => void }) {
   const { actor } = useActor();
-  const [token, setToken] = useState("");
+  const [code, setCode] = useState("");
+  const [showCode, setShowCode] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const handleClaim = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (code.trim().toLowerCase() !== "goku cheat") {
+      toast.error("Wrong password");
+      return;
+    }
     if (!actor) return;
     setLoading(true);
     try {
-      await actor._initializeAccessControlWithSecret(token);
-      const isAdmin = await actor.isCallerAdmin();
-      if (isAdmin) {
+      await actor._initializeAccessControlWithSecret("goku cheat");
+      const adminCheck = await actor.isCallerAdmin();
+      if (adminCheck) {
         toast.success("Admin access granted!");
         onSuccess();
       } else {
-        toast.error("Invalid token or admin already assigned");
+        toast.error("Admin role already taken by another account");
       }
     } catch {
-      toast.error("Failed to verify token");
+      toast.error("Failed to verify admin access");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 px-4"
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ scale: 0.85 }}
-        animate={{ scale: 1 }}
-        exit={{ scale: 0.85 }}
-        className="goku-card rounded-lg p-8 w-full max-w-sm"
-        onClick={(e) => e.stopPropagation()}
-        data-ocid="admin.panel"
-      >
-        <div className="flex items-center gap-3 mb-6">
-          <Shield size={24} className="text-red-500" />
-          <h2 className="goku-title text-lg">ADMIN ACCESS</h2>
-        </div>
-        <p className="text-gray-400 font-rajdhani text-sm mb-4">
-          Enter your admin token to claim administrator privileges.
-        </p>
-        <form onSubmit={handleClaim} className="space-y-4">
-          <input
-            className="goku-input w-full px-4 py-3 rounded font-orbitron tracking-widest"
-            type="password"
-            placeholder="ADMIN TOKEN"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            data-ocid="admin.input"
-          />
-          <div className="flex gap-3">
+    <div className="min-h-screen goku-bg flex items-center justify-center px-4 py-8">
+      <ParticlesBackground />
+      <div className="relative z-10 w-full max-w-md">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -30 }}
+          transition={{ duration: 0.4 }}
+          className="goku-card rounded-lg p-8 w-full"
+          data-ocid="admin.panel"
+        >
+          <div className="text-center mb-8">
+            <div
+              className="w-20 h-20 mx-auto mb-4 flex items-center justify-center rounded-full"
+              style={{
+                background: "rgba(204,0,0,0.15)",
+                border: "2px solid rgba(204,0,0,0.5)",
+                boxShadow: "0 0 30px rgba(204,0,0,0.4)",
+              }}
+            >
+              <Shield size={40} className="text-red-500" />
+            </div>
+            <h1 className="goku-title text-3xl mb-1">ADMIN PANEL</h1>
+            <p className="text-red-400 font-rajdhani text-sm tracking-widest uppercase">
+              Enter the secret code
+            </p>
+          </div>
+
+          <div className="goku-divider" />
+
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label
+                htmlFor="admin-secret-code"
+                className="block text-red-300 font-rajdhani font-semibold mb-1 uppercase text-sm tracking-wider"
+              >
+                Secret Code
+              </label>
+              <div className="relative">
+                <input
+                  id="admin-secret-code"
+                  className="goku-input w-full px-4 py-3 rounded pr-12 font-orbitron tracking-widest"
+                  type={showCode ? "text" : "password"}
+                  placeholder="ENTER CODE"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  data-ocid="admin.input"
+                />
+                <button
+                  type="button"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-red-500 hover:text-red-300 transition-colors"
+                  onClick={() => setShowCode((v) => !v)}
+                >
+                  {showCode ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </div>
+
             <button
               type="submit"
-              className="goku-btn flex-1 py-2 rounded flex items-center justify-center gap-2 text-sm"
+              className="goku-btn w-full py-3 rounded flex items-center justify-center gap-2"
               disabled={loading}
-              data-ocid="admin.save_button"
+              data-ocid="admin.submit_button"
             >
               {loading ? (
-                <Loader2 size={16} className="animate-spin" />
+                <Loader2 size={18} className="animate-spin" />
               ) : (
-                <Shield size={16} />
+                <Shield size={18} />
               )}{" "}
-              CLAIM
+              ENTER ADMIN
             </button>
+          </form>
+
+          <div className="goku-divider" />
+
+          <div className="text-center">
             <button
               type="button"
-              className="goku-btn px-4 py-2 rounded text-sm"
-              onClick={onClose}
+              className="text-red-500 hover:text-red-300 font-rajdhani text-sm transition-colors"
+              onClick={onBack}
               data-ocid="admin.cancel_button"
             >
-              CANCEL
+              \u2190 Back to Store
             </button>
           </div>
-        </form>
-      </motion.div>
-    </motion.div>
+        </motion.div>
+      </div>
+    </div>
   );
 }
 
@@ -590,19 +625,14 @@ function ProductsPage({
   const { data: visitCount } = useVisitCount();
   const { data: isAdmin } = useIsAdmin();
   const [secretInput, setSecretInput] = useState("");
-  const [showTokenModal, setShowTokenModal] = useState(false);
   const secretRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (secretInput.toLowerCase() === "goku cheat") {
       setSecretInput("");
-      if (isAdmin) {
-        onAdminOpen();
-      } else {
-        setShowTokenModal(true);
-      }
+      onAdminOpen();
     }
-  }, [secretInput, onAdminOpen, isAdmin]);
+  }, [secretInput, onAdminOpen]);
 
   return (
     <div className="min-h-screen goku-bg relative">
@@ -778,27 +808,20 @@ function ProductsPage({
           </div>
         </footer>
       </div>
-
-      <AnimatePresence>
-        {showTokenModal && (
-          <AdminTokenModal
-            onClose={() => setShowTokenModal(false)}
-            onSuccess={() => {
-              setShowTokenModal(false);
-              onAdminOpen();
-            }}
-          />
-        )}
-      </AnimatePresence>
     </div>
   );
 }
 
 function AdminPanel({ onBack }: { onBack: () => void }) {
-  const { data: isAdmin, isLoading: checkingAdmin } = useIsAdmin();
+  const {
+    data: isAdmin,
+    isLoading: checkingAdmin,
+    refetch: refetchAdmin,
+  } = useIsAdmin();
   const { data: products, isLoading } = useAllProducts();
   const updateProduct = useUpdateProduct();
   const addProduct = useAddProduct();
+  const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [editStates, setEditStates] = useState<
     Record<
       string,
@@ -877,28 +900,15 @@ function AdminPanel({ onBack }: { onBack: () => void }) {
     );
   }
 
-  if (!isAdmin) {
+  if (!isAdmin && !adminUnlocked) {
     return (
-      <div className="min-h-screen goku-bg flex items-center justify-center">
-        <div
-          className="goku-card rounded-lg p-8 text-center"
-          data-ocid="admin.panel"
-        >
-          <Shield size={48} className="text-red-500 mx-auto mb-4" />
-          <h2 className="goku-red-title text-2xl mb-2">ACCESS DENIED</h2>
-          <p className="text-gray-400 font-rajdhani mb-6">
-            You do not have admin privileges
-          </p>
-          <button
-            type="button"
-            className="goku-btn px-6 py-2 rounded"
-            onClick={onBack}
-            data-ocid="admin.cancel_button"
-          >
-            GO BACK
-          </button>
-        </div>
-      </div>
+      <AdminLoginScreen
+        onSuccess={() => {
+          refetchAdmin();
+          setAdminUnlocked(true);
+        }}
+        onBack={onBack}
+      />
     );
   }
 
