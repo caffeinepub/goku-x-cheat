@@ -40,6 +40,26 @@ actor {
   var userProfileEntries : [(Principal, UserProfile)] = [];
   let userProfiles = Map.fromIter<Principal, UserProfile>(userProfileEntries.vals());
 
+  public type SiteSettings = {
+    logoUrl : Text;
+    themeAccent : Text;
+    discordUrl : Text;
+    siteName : Text;
+  };
+
+  var siteSettings : ?SiteSettings = null;
+
+  public query func getSiteSettings() : async ?SiteSettings {
+    siteSettings;
+  };
+
+  public shared ({ caller }) func updateSiteSettings(settings : SiteSettings) : async () {
+    if (not (AccessControl.isAdmin(accessControlState, caller))) {
+      Runtime.trap("Unauthorized");
+    };
+    siteSettings := ?settings;
+  };
+
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized");

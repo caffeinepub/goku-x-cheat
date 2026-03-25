@@ -9,6 +9,7 @@ import {
   Settings,
   Shield,
   ShoppingCart,
+  User,
   Users,
   Video,
   X,
@@ -25,20 +26,78 @@ import {
   useActiveProducts,
   useAddProduct,
   useAllProducts,
-  useIsAdmin,
   useUpdateProduct,
   useVisitCount,
 } from "./hooks/useQueries";
 
-type View = "login" | "register" | "products" | "admin";
+type View = "login" | "register" | "products" | "admin" | "profile";
+
+// Count-up animation hook
+function useCountUp(target: number | undefined, duration = 1500) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    if (target === undefined) return;
+    if (target === 0) {
+      setCount(0);
+      return;
+    }
+    let current = 0;
+    const step = target / (duration / 16);
+    const timer = setInterval(() => {
+      current += step;
+      if (current >= target) {
+        setCount(target);
+        clearInterval(timer);
+      } else {
+        setCount(Math.floor(current));
+      }
+    }, 16);
+    return () => clearInterval(timer);
+  }, [target, duration]);
+  return count;
+}
 
 function ParticlesBackground() {
   return (
-    <div className="particles-container">
-      {Array.from({ length: 12 }, (_, i) => `p${i}`).map((key) => (
-        <div key={key} className="particle" />
-      ))}
-    </div>
+    <>
+      <div className="kamehameha-beam" />
+      <div className="screen-flash" />
+      <div className="particles-container">
+        {Array.from({ length: 20 }, (_, i) => `p${i}`).map((key) => (
+          <div key={key} className="particle" />
+        ))}
+        <div className="energy-orb orb-1" />
+        <div className="energy-orb orb-2" />
+        <div className="energy-orb orb-3" />
+        <div className="energy-orb orb-4" />
+        <div className="energy-lines" />
+      </div>
+    </>
+  );
+}
+
+// Typing text effect component
+function TypingText({ text }: { text: string }) {
+  const [displayed, setDisplayed] = useState("");
+  useEffect(() => {
+    let i = 0;
+    setDisplayed("");
+    const iv = setInterval(() => {
+      if (i < text.length) {
+        setDisplayed(text.slice(0, i + 1));
+        i++;
+      } else {
+        clearInterval(iv);
+      }
+    }, 60);
+    return () => clearInterval(iv);
+  }, [text]);
+
+  return (
+    <p className="text-gray-500 font-rajdhani tracking-widest text-xs mt-1 uppercase relative z-10 min-h-[1.2em]">
+      {displayed}
+      <span className="inline-block w-0.5 h-3 bg-red-500 ml-0.5 animate-pulse" />
+    </p>
   );
 }
 
@@ -65,11 +124,13 @@ function LoginForm({
       data-ocid="login.panel"
     >
       <div className="text-center mb-8">
-        <img
-          src="/assets/generated/goku-x-cheat-logo-transparent.dim_400x400.png"
+        <motion.img
+          src="/assets/generated/goku-x-cheat-logo.dim_400x400.png"
           alt="Goku X Cheat"
-          className="w-24 h-24 mx-auto mb-4 object-contain"
+          className="w-24 h-24 mx-auto mb-4 object-contain cursor-pointer"
           style={{ filter: "drop-shadow(0 0 20px rgba(204,0,0,0.8))" }}
+          whileHover={{ rotate: 12, scale: 1.1 }}
+          transition={{ type: "spring", stiffness: 300 }}
         />
         <h1 className="goku-title text-3xl mb-1">GOKU X CHEAT</h1>
         <p className="text-red-400 font-rajdhani text-sm tracking-widest uppercase">
@@ -168,17 +229,47 @@ function RegisterForm({
   const [generatedCode, setGeneratedCode] = useState("");
   const [step, setStep] = useState<"form" | "verify">("form");
   const [loading, setLoading] = useState(false);
+  const [awaitingProfile, setAwaitingProfile] = useState(false);
+  const pendingNameRef = useRef("");
+  const [captchaA, setCaptchaA] = useState(
+    () => Math.floor(Math.random() * 9) + 1,
+  );
+  const [captchaB, setCaptchaB] = useState(
+    () => Math.floor(Math.random() * 9) + 1,
+  );
+  const [captchaAnswer, setCaptchaAnswer] = useState("");
+
+  const regenerateCaptcha = () => {
+    setCaptchaA(Math.floor(Math.random() * 9) + 1);
+    setCaptchaB(Math.floor(Math.random() * 9) + 1);
+    setCaptchaAnswer("");
+  };
 
   useEffect(() => {
-    if (loginStatus === "success") {
-      onRegister();
+    if (awaitingProfile && actor && loginStatus === "success") {
+      setAwaitingProfile(false);
+      (async () => {
+        try {
+          await actor._initializeAccessControlWithSecret("");
+          await actor.saveCallerUserProfile({ name: pendingNameRef.current });
+          toast.success("Registration successful!");
+          onRegister();
+        } catch {
+          toast.error("Failed to save profile");
+        }
+      })();
     }
-  }, [loginStatus, onRegister]);
+  }, [awaitingProfile, actor, loginStatus, onRegister]);
 
   const handleSendCode = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !email) {
       toast.error("Fill in all fields");
+      return;
+    }
+    if (Number.parseInt(captchaAnswer) !== captchaA + captchaB) {
+      toast.error("Incorrect answer, try again");
+      regenerateCaptcha();
       return;
     }
     if (!actor) {
@@ -205,9 +296,9 @@ function RegisterForm({
     try {
       const valid = await actor.verifyCode(email, code);
       if (valid) {
-        await actor._initializeAccessControlWithSecret("");
-        await actor.saveCallerUserProfile({ name });
-        toast.success("Registration successful! Logging in...");
+        pendingNameRef.current = name;
+        setAwaitingProfile(true);
+        toast.success("Code verified! Opening login...");
         login();
       } else {
         toast.error("Invalid code. Try again.");
@@ -229,11 +320,13 @@ function RegisterForm({
       data-ocid="register.panel"
     >
       <div className="text-center mb-8">
-        <img
-          src="/assets/generated/goku-x-cheat-logo-transparent.dim_400x400.png"
+        <motion.img
+          src="/assets/generated/goku-x-cheat-logo.dim_400x400.png"
           alt="Goku X Cheat"
-          className="w-20 h-20 mx-auto mb-3 object-contain"
+          className="w-20 h-20 mx-auto mb-3 object-contain cursor-pointer"
           style={{ filter: "drop-shadow(0 0 20px rgba(204,0,0,0.8))" }}
+          whileHover={{ rotate: 12, scale: 1.1 }}
+          transition={{ type: "spring", stiffness: 300 }}
         />
         <h1 className="goku-title text-2xl mb-1">CREATE ACCOUNT</h1>
         <p className="text-red-500 font-rajdhani text-sm tracking-widest uppercase">
@@ -285,6 +378,43 @@ function RegisterForm({
                 onChange={(e) => setEmail(e.target.value)}
                 data-ocid="register.input"
               />
+            </div>
+            <div
+              className="rounded p-4 space-y-3"
+              style={{
+                background: "rgba(204,0,0,0.07)",
+                border: "1px solid rgba(204,0,0,0.4)",
+                boxShadow: "0 0 12px rgba(204,0,0,0.2)",
+              }}
+            >
+              <label
+                htmlFor="captcha-answer"
+                className="block text-red-300 font-rajdhani font-semibold uppercase text-sm tracking-wider"
+              >
+                Human Verification
+              </label>
+              <p
+                className="text-center font-orbitron tracking-widest"
+                style={{
+                  fontSize: "1.4rem",
+                  color: "#ff3333",
+                  textShadow: "0 0 10px rgba(255,51,51,0.6)",
+                }}
+              >
+                What is {captchaA} + {captchaB}?
+              </p>
+              <input
+                className="goku-input w-full px-4 py-2 rounded text-center font-orbitron tracking-widest text-lg"
+                type="number"
+                placeholder="?"
+                id="captcha-answer"
+                value={captchaAnswer}
+                onChange={(e) => setCaptchaAnswer(e.target.value)}
+                data-ocid="register.input"
+              />
+              <p className="text-gray-600 text-xs font-rajdhani text-center">
+                Solve the equation above
+              </p>
             </div>
             <button
               type="submit"
@@ -434,13 +564,25 @@ function ProductCard({ product, index }: { product: Product; index: number }) {
   return (
     <>
       <motion.div
-        initial={{ opacity: 0, y: 40 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: index * 0.15, duration: 0.5 }}
+        initial={{ opacity: 0, y: 60, rotate: -3 }}
+        animate={{ opacity: 1, y: 0, rotate: 0 }}
+        transition={{
+          delay: index * 0.15,
+          duration: 0.6,
+          type: "spring",
+          stiffness: 200,
+          damping: 15,
+        }}
+        whileHover={{ scale: 1.04, y: -10 }}
         className="product-card rounded-lg p-6 flex flex-col gap-4"
         data-ocid={`product.item.${index + 1}`}
       >
-        <div>
+        <div className="relative">
+          {index === 0 && (
+            <span className="new-badge absolute -top-3 -right-3 z-10 font-orbitron text-xs px-2 py-0.5 rounded">
+              NEW
+            </span>
+          )}
           <h3 className="goku-title text-xl mb-3">{product.name}</h3>
           <div className="goku-divider" style={{ margin: "0.5rem 0" }} />
           <ul className="space-y-2">
@@ -496,33 +638,17 @@ function AdminLoginScreen({
   onSuccess,
   onBack,
 }: { onSuccess: () => void; onBack: () => void }) {
-  const { actor } = useActor();
   const [code, setCode] = useState("");
   const [showCode, setShowCode] = useState(false);
-  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (code.trim().toLowerCase() !== "goku cheat") {
       toast.error("Wrong password");
       return;
     }
-    if (!actor) return;
-    setLoading(true);
-    try {
-      await actor._initializeAccessControlWithSecret("goku cheat");
-      const adminCheck = await actor.isCallerAdmin();
-      if (adminCheck) {
-        toast.success("Admin access granted!");
-        onSuccess();
-      } else {
-        toast.error("Admin role already taken by another account");
-      }
-    } catch {
-      toast.error("Failed to verify admin access");
-    } finally {
-      setLoading(false);
-    }
+    toast.success("Admin access granted! 🔥");
+    onSuccess();
   };
 
   return (
@@ -538,16 +664,24 @@ function AdminLoginScreen({
           data-ocid="admin.panel"
         >
           <div className="text-center mb-8">
-            <div
+            <motion.div
               className="w-20 h-20 mx-auto mb-4 flex items-center justify-center rounded-full"
               style={{
                 background: "rgba(204,0,0,0.15)",
                 border: "2px solid rgba(204,0,0,0.5)",
                 boxShadow: "0 0 30px rgba(204,0,0,0.4)",
               }}
+              animate={{
+                boxShadow: [
+                  "0 0 30px rgba(204,0,0,0.4)",
+                  "0 0 60px rgba(255,0,0,0.7)",
+                  "0 0 30px rgba(204,0,0,0.4)",
+                ],
+              }}
+              transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY }}
             >
               <Shield size={40} className="text-red-500" />
-            </div>
+            </motion.div>
             <h1 className="goku-title text-3xl mb-1">ADMIN PANEL</h1>
             <p className="text-red-400 font-rajdhani text-sm tracking-widest uppercase">
               Enter the secret code
@@ -587,15 +721,9 @@ function AdminLoginScreen({
             <button
               type="submit"
               className="goku-btn w-full py-3 rounded flex items-center justify-center gap-2"
-              disabled={loading}
               data-ocid="admin.submit_button"
             >
-              {loading ? (
-                <Loader2 size={18} className="animate-spin" />
-              ) : (
-                <Shield size={18} />
-              )}{" "}
-              ENTER ADMIN
+              <Shield size={18} /> ENTER ADMIN
             </button>
           </form>
 
@@ -620,10 +748,17 @@ function AdminLoginScreen({
 function ProductsPage({
   onAdminOpen,
   onLogout,
-}: { onAdminOpen: () => void; onLogout: () => void }) {
+  onProfileOpen,
+}: {
+  onAdminOpen: () => void;
+  onLogout: () => void;
+  onProfileOpen: () => void;
+}) {
   const { data: products, isLoading } = useActiveProducts();
   const { data: visitCount } = useVisitCount();
-  const { data: isAdmin } = useIsAdmin();
+  const animatedCount = useCountUp(
+    visitCount !== undefined ? Number(visitCount) : undefined,
+  );
   const [secretInput, setSecretInput] = useState("");
   const secretRef = useRef<HTMLInputElement>(null);
 
@@ -638,14 +773,26 @@ function ProductsPage({
     <div className="min-h-screen goku-bg relative">
       <ParticlesBackground />
       <div className="relative z-10">
-        <header className="border-b border-red-900/50 bg-black/60 backdrop-blur-sm sticky top-0 z-20">
+        <motion.header
+          className="border-b border-red-900/50 bg-black/60 backdrop-blur-sm sticky top-0 z-20"
+          initial={{ y: -100 }}
+          animate={{ y: 0 }}
+          transition={{ type: "spring", stiffness: 200, damping: 20 }}
+        >
           <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <img
-                src="/assets/generated/goku-x-cheat-logo-transparent.dim_400x400.png"
+              <motion.img
+                src="/assets/generated/goku-x-cheat-logo.dim_400x400.png"
                 alt="Goku X Cheat"
-                className="w-12 h-12 object-contain"
+                className="w-12 h-12 object-contain cursor-pointer"
                 style={{ filter: "drop-shadow(0 0 10px rgba(204,0,0,0.8))" }}
+                animate={{ y: [0, -6, 0] }}
+                transition={{
+                  duration: 2.5,
+                  repeat: Number.POSITIVE_INFINITY,
+                  ease: "easeInOut",
+                }}
+                whileHover={{ rotate: 12, scale: 1.15 }}
               />
               <div>
                 <h1 className="goku-title text-xl leading-none">
@@ -660,22 +807,28 @@ function ProductsPage({
               <div className="visit-counter px-4 py-2 rounded flex items-center gap-2">
                 <Users size={16} className="text-red-500" />
                 <span className="font-orbitron text-red-400 text-sm">
-                  {visitCount !== undefined ? visitCount.toString() : "..."}
+                  {visitCount !== undefined ? animatedCount.toString() : "..."}
                 </span>
                 <span className="text-gray-500 text-xs font-rajdhani uppercase">
                   visits
                 </span>
               </div>
-              {isAdmin && (
-                <button
-                  type="button"
-                  className="goku-btn px-3 py-2 rounded text-xs flex items-center gap-1"
-                  onClick={onAdminOpen}
-                  data-ocid="nav.button"
-                >
-                  <Settings size={14} /> ADMIN
-                </button>
-              )}
+              <button
+                type="button"
+                className="goku-btn-gold px-3 py-2 rounded text-xs flex items-center gap-1"
+                onClick={onProfileOpen}
+                data-ocid="profile.open_modal_button"
+              >
+                <User size={14} /> PROFILE
+              </button>
+              <button
+                type="button"
+                className="goku-btn px-3 py-2 rounded text-xs flex items-center gap-1"
+                onClick={onAdminOpen}
+                data-ocid="nav.button"
+              >
+                <Settings size={14} /> ADMIN
+              </button>
               <button
                 type="button"
                 className="goku-btn px-3 py-2 rounded text-xs flex items-center gap-1"
@@ -686,9 +839,76 @@ function ProductsPage({
               </button>
             </div>
           </div>
-        </header>
+        </motion.header>
 
         <main className="max-w-7xl mx-auto px-4 py-8">
+          {/* HERO BANNER */}
+          <div className="hero-banner relative overflow-hidden rounded-xl mb-8 flex flex-col items-center justify-center py-12 text-center">
+            <div className="scan-line" />
+            <span className="lightning-bolt bolt-1" />
+            <span className="lightning-bolt bolt-2" />
+            <span className="lightning-bolt bolt-3" />
+            <span className="lightning-bolt bolt-4" />
+            <span className="lightning-bolt bolt-5" />
+            <span className="lightning-bolt bolt-6" />
+            <div className="shockwave-container">
+              <div className="shockwave-ring" />
+              <div className="shockwave-ring" />
+              <div className="shockwave-ring" />
+            </div>
+            <div className="relative z-10">
+              <div className="aura-ring" />
+              <div className="aura-ring" />
+              <div className="aura-ring" />
+              <motion.img
+                src="/assets/generated/goku-x-cheat-logo.dim_400x400.png"
+                alt="Goku X Cheat"
+                className="w-32 h-32 object-contain logo-pulse-glow logo-spin-hover relative z-10"
+                initial={{ scale: 0, rotate: 0 }}
+                animate={{
+                  scale: [0, 1.25, 1],
+                  rotate: [0, 720, 720],
+                  y: [0, 0, 0, -10, 0],
+                }}
+                transition={{
+                  scale: { duration: 1, ease: "backOut", times: [0, 0.7, 1] },
+                  rotate: { duration: 1, ease: "easeInOut" },
+                  y: {
+                    duration: 3,
+                    repeat: Number.POSITIVE_INFINITY,
+                    ease: "easeInOut",
+                    delay: 1,
+                  },
+                }}
+              />
+              <div className="power-level-particles">
+                <span className="power-particle">+9000</span>
+                <span className="power-particle">+9000</span>
+                <span className="power-particle">POWER!</span>
+              </div>
+            </div>
+            <motion.h2
+              className="goku-title text-3xl md:text-5xl mt-4 relative z-10"
+              initial={{ opacity: 0, scale: 0.5 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{
+                delay: 0.8,
+                duration: 0.5,
+                type: "spring",
+                stiffness: 300,
+              }}
+            >
+              GOKU X CHEAT
+            </motion.h2>
+            <p
+              className="glitch-text font-orbitron text-red-400 text-sm md:text-base tracking-[0.3em] mt-2 relative z-10"
+              data-text="POWER LEVEL: OVER 9000"
+            >
+              POWER LEVEL: OVER 9000
+            </p>
+            <TypingText text="FREE FIRE DOMINATION PANEL" />
+          </div>
+
           <motion.section
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -697,7 +917,16 @@ function ProductsPage({
           >
             <div className="flex flex-col items-center gap-4">
               <div className="flex items-center gap-3">
-                <SiDiscord size={40} className="text-red-400" />
+                <motion.div
+                  animate={{ scale: [1, 1.2, 1], rotate: [0, 5, -5, 0] }}
+                  transition={{
+                    duration: 3,
+                    repeat: Number.POSITIVE_INFINITY,
+                    ease: "easeInOut",
+                  }}
+                >
+                  <SiDiscord size={40} className="text-red-400" />
+                </motion.div>
                 <div>
                   <h2 className="goku-title text-2xl">JOIN OUR DISCORD</h2>
                   <p className="text-red-300/70 font-rajdhani tracking-widest text-sm">
@@ -718,10 +947,15 @@ function ProductsPage({
           </motion.section>
 
           <section>
-            <div className="flex items-center gap-4 mb-6">
+            <motion.div
+              className="flex items-center gap-4 mb-6"
+              initial={{ opacity: 0, x: -30 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.5 }}
+            >
               <h2 className="goku-red-title text-2xl">OUR PRODUCTS</h2>
               <div className="flex-1 goku-divider" style={{ margin: 0 }} />
-            </div>
+            </motion.div>
 
             {isLoading ? (
               <div
@@ -731,11 +965,19 @@ function ProductsPage({
                 <div className="goku-loading" />
               </div>
             ) : products && products.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+              <motion.div
+                className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6"
+                initial="hidden"
+                animate="visible"
+                variants={{
+                  hidden: {},
+                  visible: { transition: { staggerChildren: 0.12 } },
+                }}
+              >
                 {products.map((p, i) => (
                   <ProductCard key={p.id.toString()} product={p} index={i} />
                 ))}
-              </div>
+              </motion.div>
             ) : (
               <div
                 className="text-center py-16 text-gray-500 font-rajdhani"
@@ -754,7 +996,7 @@ function ProductsPage({
             <div className="flex flex-col md:flex-row items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <img
-                  src="/assets/generated/goku-x-cheat-logo-transparent.dim_400x400.png"
+                  src="/assets/generated/goku-x-cheat-logo.dim_400x400.png"
                   alt="Logo"
                   className="w-8 h-8 object-contain"
                   style={{ filter: "drop-shadow(0 0 6px rgba(204,0,0,0.6))" }}
@@ -813,15 +1055,10 @@ function ProductsPage({
 }
 
 function AdminPanel({ onBack }: { onBack: () => void }) {
-  const {
-    data: isAdmin,
-    isLoading: checkingAdmin,
-    refetch: refetchAdmin,
-  } = useIsAdmin();
+  const { actor } = useActor();
   const { data: products, isLoading } = useAllProducts();
   const updateProduct = useUpdateProduct();
   const addProduct = useAddProduct();
-  const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [editStates, setEditStates] = useState<
     Record<
       string,
@@ -835,6 +1072,59 @@ function AdminPanel({ onBack }: { onBack: () => void }) {
     isActive: true,
   });
   const [showAdd, setShowAdd] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [siteSettings, setSiteSettings] = useState({
+    siteName: "GOKU X CHEAT",
+    logoUrl: "",
+    themeAccent: "red",
+    discordUrl: "https://discord.gg/fHhsEQkY49",
+  });
+  const [savingSettings, setSavingSettings] = useState(false);
+
+  useEffect(() => {
+    if (!actor) return;
+    (async () => {
+      try {
+        const result = await (actor as any).getSiteSettings();
+        if (result && result.length > 0 && result[0]) {
+          const s = result[0];
+          setSiteSettings({
+            siteName: s.siteName || "GOKU X CHEAT",
+            logoUrl: s.logoUrl || "",
+            themeAccent: s.themeAccent || "red",
+            discordUrl: s.discordUrl || "https://discord.gg/fHhsEQkY49",
+          });
+        }
+      } catch {
+        // ignore
+      }
+    })();
+  }, [actor]);
+
+  const handleSaveSettings = async () => {
+    if (!actor) return;
+    setSavingSettings(true);
+    try {
+      await (actor as any).updateSiteSettings(siteSettings);
+      // Apply theme
+      const colorMap: Record<string, string> = {
+        red: "#cc0000",
+        blue: "#0066cc",
+        purple: "#7700cc",
+        green: "#00aa44",
+        gold: "#ffd700",
+      };
+      document.documentElement.style.setProperty(
+        "--goku-accent",
+        colorMap[siteSettings.themeAccent] || "#cc0000",
+      );
+      toast.success("Site settings saved!");
+    } catch {
+      toast.error("Failed to save settings");
+    } finally {
+      setSavingSettings(false);
+    }
+  };
 
   const getEdit = (p: Product) =>
     editStates[p.id.toString()] ?? {
@@ -889,37 +1179,29 @@ function AdminPanel({ onBack }: { onBack: () => void }) {
     setShowAdd(false);
   };
 
-  if (checkingAdmin) {
-    return (
-      <div
-        className="min-h-screen goku-bg flex items-center justify-center"
-        data-ocid="admin.loading_state"
-      >
-        <div className="goku-loading" />
-      </div>
-    );
-  }
-
-  if (!isAdmin && !adminUnlocked) {
-    return (
-      <AdminLoginScreen
-        onSuccess={() => {
-          refetchAdmin();
-          setAdminUnlocked(true);
-        }}
-        onBack={onBack}
-      />
-    );
-  }
-
   return (
-    <div className="min-h-screen goku-bg relative">
+    <motion.div
+      className="min-h-screen goku-bg relative"
+      initial={{ backgroundColor: "rgba(204,0,0,0.4)" }}
+      animate={{ backgroundColor: "rgba(0,0,0,0)" }}
+      transition={{ duration: 0.5 }}
+    >
       <ParticlesBackground />
       <div className="relative z-10">
-        <header className="border-b border-red-900/50 bg-black/60 backdrop-blur-sm sticky top-0 z-20">
+        <motion.header
+          className="border-b border-red-900/50 bg-black/60 backdrop-blur-sm sticky top-0 z-20"
+          initial={{ y: -100 }}
+          animate={{ y: 0 }}
+          transition={{ type: "spring", stiffness: 200, damping: 20 }}
+        >
           <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Shield size={24} className="text-red-500" />
+              <motion.div
+                animate={{ rotate: [0, 5, -5, 0] }}
+                transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY }}
+              >
+                <Shield size={24} className="text-red-500" />
+              </motion.div>
               <h1 className="goku-title text-xl">ADMIN PANEL</h1>
             </div>
             <button
@@ -931,9 +1213,146 @@ function AdminPanel({ onBack }: { onBack: () => void }) {
               <X size={16} /> EXIT ADMIN
             </button>
           </div>
-        </header>
+        </motion.header>
 
         <main className="max-w-5xl mx-auto px-4 py-8" data-ocid="admin.panel">
+          {/* Site Settings Section */}
+          <div className="mb-8">
+            <button
+              type="button"
+              className="w-full flex items-center justify-between goku-card rounded-xl px-6 py-4 mb-2"
+              onClick={() => setShowSettings((v) => !v)}
+              data-ocid="admin.settings.toggle"
+            >
+              <h2 className="goku-red-title text-xl flex items-center gap-2">
+                <Settings size={18} className="text-red-500" /> SITE SETTINGS
+              </h2>
+              <span className="text-red-500 font-orbitron text-xs">
+                {showSettings ? "▲ COLLAPSE" : "▼ EXPAND"}
+              </span>
+            </button>
+            <AnimatePresence>
+              {showSettings && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="admin-card rounded-xl p-6 overflow-hidden"
+                  data-ocid="admin.settings.panel"
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                      <label
+                        htmlFor="s-sitename"
+                        className="block text-red-300 font-rajdhani font-semibold mb-2 uppercase text-xs tracking-widest"
+                      >
+                        Site Name
+                      </label>
+                      <input
+                        id="s-sitename"
+                        className="goku-input w-full px-3 py-2 rounded text-sm"
+                        value={siteSettings.siteName}
+                        onChange={(e) =>
+                          setSiteSettings((p) => ({
+                            ...p,
+                            siteName: e.target.value,
+                          }))
+                        }
+                        placeholder="GOKU X CHEAT"
+                        data-ocid="admin.settings.input"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="s-logo"
+                        className="block text-red-300 font-rajdhani font-semibold mb-2 uppercase text-xs tracking-widest"
+                      >
+                        Logo URL
+                      </label>
+                      <input
+                        id="s-logo"
+                        className="goku-input w-full px-3 py-2 rounded text-sm"
+                        value={siteSettings.logoUrl}
+                        onChange={(e) =>
+                          setSiteSettings((p) => ({
+                            ...p,
+                            logoUrl: e.target.value,
+                          }))
+                        }
+                        placeholder="https://example.com/logo.png"
+                        data-ocid="admin.settings.input"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="s-theme"
+                        className="block text-red-300 font-rajdhani font-semibold mb-2 uppercase text-xs tracking-widest"
+                      >
+                        Theme Accent
+                      </label>
+                      <select
+                        id="s-theme"
+                        className="goku-input w-full px-3 py-2 rounded text-sm bg-black"
+                        value={siteSettings.themeAccent}
+                        onChange={(e) =>
+                          setSiteSettings((p) => ({
+                            ...p,
+                            themeAccent: e.target.value,
+                          }))
+                        }
+                        data-ocid="admin.settings.select"
+                      >
+                        <option value="red">🔴 Red (Default)</option>
+                        <option value="blue">🔵 Blue</option>
+                        <option value="purple">🟣 Purple</option>
+                        <option value="green">🟢 Green</option>
+                        <option value="gold">🟡 Gold</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="s-discord"
+                        className="block text-red-300 font-rajdhani font-semibold mb-2 uppercase text-xs tracking-widest"
+                      >
+                        Discord URL
+                      </label>
+                      <input
+                        id="s-discord"
+                        className="goku-input w-full px-3 py-2 rounded text-sm"
+                        value={siteSettings.discordUrl}
+                        onChange={(e) =>
+                          setSiteSettings((p) => ({
+                            ...p,
+                            discordUrl: e.target.value,
+                          }))
+                        }
+                        placeholder="https://discord.gg/..."
+                        data-ocid="admin.settings.input"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="goku-btn mt-5 px-6 py-2 rounded flex items-center gap-2 text-sm"
+                    onClick={handleSaveSettings}
+                    disabled={savingSettings}
+                    data-ocid="admin.settings.save_button"
+                  >
+                    {savingSettings ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin" /> SAVING...
+                      </>
+                    ) : (
+                      <>
+                        <Save size={14} /> SAVE SETTINGS
+                      </>
+                    )}
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
           <div className="flex items-center justify-between mb-6">
             <h2 className="goku-red-title text-xl">MANAGE PRODUCTS</h2>
             <button
@@ -1203,19 +1622,278 @@ function AdminPanel({ onBack }: { onBack: () => void }) {
           )}
         </main>
       </div>
-    </div>
+    </motion.div>
+  );
+}
+
+function ProfilePage({ onBack }: { onBack: () => void }) {
+  const { actor } = useActor();
+  const { identity } = useInternetIdentity();
+  const [name, setName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
+
+  const principal = identity?.getPrincipal().toString() ?? "";
+  const shortPrincipal =
+    principal.length > 12
+      ? `${principal.slice(0, 8)}...${principal.slice(-4)}`
+      : principal;
+
+  useEffect(() => {
+    if (!actor) return;
+    (async () => {
+      try {
+        const profile = await actor.getCallerUserProfile();
+        if (profile) setName(profile.name);
+      } catch {
+        // ignore
+      } finally {
+        setFetching(false);
+      }
+    })();
+  }, [actor]);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!actor) return;
+    setLoading(true);
+    try {
+      await actor.saveCallerUserProfile({ name });
+      toast.success("Profile saved! Power level rising...");
+    } catch {
+      toast.error("Failed to save profile");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <motion.div
+      key="profile"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="min-h-screen goku-bg relative"
+    >
+      <ParticlesBackground />
+      <div className="relative z-10">
+        {/* Header */}
+        <header className="border-b border-red-900/50 bg-black/60 backdrop-blur-sm sticky top-0 z-20">
+          <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <motion.img
+                src="/assets/generated/goku-x-cheat-logo.dim_400x400.png"
+                alt="Goku X Cheat"
+                className="w-12 h-12 object-contain"
+                style={{ filter: "drop-shadow(0 0 10px rgba(204,0,0,0.8))" }}
+                animate={{ y: [0, -6, 0] }}
+                transition={{
+                  duration: 2.5,
+                  repeat: Number.POSITIVE_INFINITY,
+                  ease: "easeInOut",
+                }}
+              />
+              <div>
+                <h1 className="goku-title text-xl leading-none">
+                  GOKU X CHEAT
+                </h1>
+                <p className="text-red-500/70 text-xs font-rajdhani tracking-widest uppercase">
+                  PLAYER PROFILE
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="goku-btn px-4 py-2 rounded text-xs flex items-center gap-2"
+              onClick={onBack}
+              data-ocid="profile.close_button"
+            >
+              ← BACK TO STORE
+            </button>
+          </div>
+        </header>
+
+        <main className="max-w-2xl mx-auto px-4 py-12">
+          {/* Logo + Title */}
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="text-center mb-8"
+          >
+            <div className="relative inline-block mb-4">
+              <motion.img
+                src="/assets/generated/goku-x-cheat-profile-logo-transparent.dim_200x200.png"
+                alt="Profile Avatar"
+                className="w-20 h-20 mx-auto rounded-full object-cover"
+                style={{
+                  border: "2px solid #cc0000",
+                  boxShadow:
+                    "0 0 24px rgba(204,0,0,0.7), 0 0 48px rgba(204,0,0,0.3)",
+                }}
+                animate={{
+                  boxShadow: [
+                    "0 0 24px rgba(204,0,0,0.7), 0 0 48px rgba(204,0,0,0.3)",
+                    "0 0 36px rgba(255,51,51,0.9), 0 0 64px rgba(255,51,51,0.5)",
+                    "0 0 24px rgba(204,0,0,0.7), 0 0 48px rgba(204,0,0,0.3)",
+                  ],
+                }}
+                transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY }}
+                whileHover={{ scale: 1.1, rotate: 5 }}
+              />
+              {/* Ring animation */}
+              <motion.div
+                className="absolute inset-0 rounded-full"
+                style={{ border: "2px solid rgba(255,215,0,0.6)" }}
+                animate={{ scale: [1, 1.3, 1], opacity: [0.8, 0, 0.8] }}
+                transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY }}
+              />
+            </div>
+            <h2 className="goku-title text-3xl">MY PROFILE</h2>
+            <p className="text-red-500/70 font-rajdhani tracking-widest text-sm mt-1">
+              WARRIOR IDENTITY
+            </p>
+          </motion.div>
+
+          {/* Profile Card */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="goku-card rounded-xl p-8 mb-6"
+          >
+            <div className="goku-divider mb-6" />
+
+            {/* Identity field */}
+            <div className="mb-5">
+              <label
+                htmlFor="profile-identity"
+                className="block text-red-300 font-rajdhani font-semibold mb-2 uppercase text-sm tracking-widest"
+              >
+                🔐 IDENTITY
+              </label>
+              <div
+                id="profile-identity"
+                className="goku-input w-full px-4 py-3 rounded font-orbitron text-xs text-gray-400 cursor-not-allowed select-all"
+                style={{ opacity: 0.7 }}
+              >
+                {shortPrincipal || "—"}
+              </div>
+              <p className="text-gray-600 text-xs font-rajdhani mt-1">
+                Your Internet Identity Principal (read-only)
+              </p>
+            </div>
+
+            {/* Name field */}
+            <form onSubmit={handleSave} className="space-y-5">
+              <div>
+                <label
+                  htmlFor="profile-name"
+                  className="block text-red-300 font-rajdhani font-semibold mb-2 uppercase text-sm tracking-widest"
+                >
+                  ⚡ WARRIOR NAME
+                </label>
+                {fetching ? (
+                  <div className="goku-input w-full px-4 py-3 rounded flex items-center gap-2">
+                    <Loader2 size={14} className="animate-spin text-red-500" />
+                    <span className="text-gray-500 text-sm font-rajdhani">
+                      Loading...
+                    </span>
+                  </div>
+                ) : (
+                  <input
+                    id="profile-name"
+                    className="goku-input w-full px-4 py-3 rounded"
+                    placeholder="Enter your warrior name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    data-ocid="profile.input"
+                  />
+                )}
+              </div>
+
+              <button
+                type="submit"
+                className="goku-btn w-full py-3 rounded flex items-center justify-center gap-2 font-orbitron tracking-widest"
+                disabled={loading || fetching}
+                data-ocid="profile.submit_button"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" /> SAVING...
+                  </>
+                ) : (
+                  <>
+                    <Save size={18} /> SAVE CHANGES
+                  </>
+                )}
+              </button>
+            </form>
+          </motion.div>
+
+          {/* Footer */}
+          <div className="text-center mt-10 text-gray-700 text-xs font-rajdhani">
+            © {new Date().getFullYear()}. Built with love using{" "}
+            <a
+              href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(typeof window !== "undefined" ? window.location.hostname : "")}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-red-900 hover:text-red-600 transition-colors"
+            >
+              caffeine.ai
+            </a>
+          </div>
+        </main>
+      </div>
+    </motion.div>
   );
 }
 
 export default function App() {
   const { identity, clear, isInitializing } = useInternetIdentity();
+  const { actor } = useActor();
   const [view, setView] = useState<View>("login");
+  const [showAdminLogin, setShowAdminLogin] = useState(true);
 
   useEffect(() => {
     if (!isInitializing && identity) {
       setView("products");
     }
   }, [identity, isInitializing]);
+
+  // Load and apply site settings on mount
+  useEffect(() => {
+    if (!actor) return;
+    (async () => {
+      try {
+        const result = await (actor as any).getSiteSettings();
+        if (result && result.length > 0 && result[0]) {
+          const s = result[0];
+          const colorMap: Record<string, string> = {
+            red: "#cc0000",
+            blue: "#0066cc",
+            purple: "#7700cc",
+            green: "#00aa44",
+            gold: "#ffd700",
+          };
+          if (s.themeAccent) {
+            document.documentElement.style.setProperty(
+              "--goku-accent",
+              colorMap[s.themeAccent] || "#cc0000",
+            );
+          }
+        }
+      } catch {
+        // ignore
+      }
+    })();
+  }, [actor]);
+
+  // Reset admin login gate when switching to admin view
+  const handleAdminOpen = () => {
+    setShowAdminLogin(true);
+    setView("admin");
+  };
 
   if (isInitializing) {
     return (
@@ -1261,12 +1939,21 @@ export default function App() {
     <>
       <Toaster theme="dark" position="top-right" />
       <AnimatePresence mode="wait">
-        {view === "admin" ? (
+        {view === "admin" && showAdminLogin ? (
+          <AdminLoginScreen
+            key="admin-login"
+            onSuccess={() => setShowAdminLogin(false)}
+            onBack={() => setView("products")}
+          />
+        ) : view === "admin" ? (
           <AdminPanel key="admin" onBack={() => setView("products")} />
+        ) : view === "profile" ? (
+          <ProfilePage key="profile" onBack={() => setView("products")} />
         ) : (
           <ProductsPage
             key="products"
-            onAdminOpen={() => setView("admin")}
+            onAdminOpen={handleAdminOpen}
+            onProfileOpen={() => setView("profile")}
             onLogout={() => {
               clear();
               setView("login");
