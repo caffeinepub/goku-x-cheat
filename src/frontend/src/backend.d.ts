@@ -17,6 +17,17 @@ export interface Product {
     isActive: boolean;
     videoUrl: string;
 }
+export type ComplaintStatus = { open: null } | { replied: null };
+export interface Complaint {
+    id: bigint;
+    caller: Principal;
+    name: string;
+    subject: string;
+    message: string;
+    timestamp: bigint;
+    status: ComplaintStatus;
+    adminReply: string;
+}
 export enum UserRole {
     admin = "admin",
     user = "user",
@@ -29,6 +40,7 @@ export interface backendInterface {
     generateVerificationCode(email: string): Promise<string>;
     getActiveProducts(): Promise<Array<Product>>;
     getAllProducts(): Promise<Array<Product>>;
+    getAllComplaints(): Promise<Array<Complaint>>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getProductById(productId: bigint): Promise<Product | null>;
@@ -36,7 +48,9 @@ export interface backendInterface {
     getVisitCount(): Promise<bigint>;
     incrementVisitCounter(): Promise<bigint>;
     isCallerAdmin(): Promise<boolean>;
+    replyToComplaint(complaintId: bigint, reply: string): Promise<void>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
+    submitComplaint(name: string, subject: string, message: string): Promise<bigint>;
     updateProduct(productId: bigint, product: Product): Promise<void>;
     verifyCode(email: string, code: string): Promise<boolean>;
 }

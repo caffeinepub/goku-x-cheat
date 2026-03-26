@@ -49,6 +49,68 @@ actor {
 
   var siteSettings : ?SiteSettings = null;
 
+  // Complaints
+  public type ComplaintStatus = { #open; #replied; };
+
+  public type Complaint = {
+    id : Nat;
+    caller : Principal;
+    name : Text;
+    subject : Text;
+    message : Text;
+    timestamp : Int;
+    status : ComplaintStatus;
+    adminReply : Text;
+  };
+
+  module Complaint {
+    public func compare(c1 : Complaint, c2 : Complaint) : { #less; #equal; #greater } {
+      Nat.compare(c1.id, c2.id);
+    };
+  };
+
+  var complaintEntries : [(Nat, Complaint)] = [];
+  let complaints = Map.fromIter<Nat, Complaint>(complaintEntries.vals());
+  var nextComplaintId = 1;
+
+  public shared ({ caller }) func submitComplaint(name : Text, subject : Text, message : Text) : async Nat {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized");
+    };
+    let c : Complaint = {
+      id = nextComplaintId;
+      caller;
+      name;
+      subject;
+      message;
+      timestamp = Time.now();
+      status = #open;
+      adminReply = "";
+    };
+    complaints.add(nextComplaintId, c);
+    nextComplaintId += 1;
+    c.id;
+  };
+
+  public query ({ caller }) func getAllComplaints() : async [Complaint] {
+    if (not (AccessControl.isAdmin(accessControlState, caller))) {
+      Runtime.trap("Unauthorized");
+    };
+    complaints.values().toArray().sort();
+  };
+
+  public shared ({ caller }) func replyToComplaint(complaintId : Nat, reply : Text) : async () {
+    if (not (AccessControl.isAdmin(accessControlState, caller))) {
+      Runtime.trap("Unauthorized");
+    };
+    switch (complaints.get(complaintId)) {
+      case (null) { Runtime.trap("Not found"); };
+      case (?c) {
+        complaints.add(complaintId, { c with status = #replied; adminReply = reply; });
+      };
+    };
+  };
+
   public query func getSiteSettings() : async ?SiteSettings {
     siteSettings;
   };
@@ -138,6 +200,7 @@ actor {
   system func preupgrade() {
     productEntries := products.entries().toArray();
     userProfileEntries := userProfiles.entries().toArray();
+    complaintEntries := complaints.entries().toArray();
   };
 
   system func postupgrade() {

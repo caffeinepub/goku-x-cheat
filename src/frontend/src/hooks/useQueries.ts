@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Product } from "../backend.d";
+import type { Complaint, Product } from "../backend.d";
 import { useActor } from "./useActor";
 
 export function useActiveProducts() {
@@ -77,6 +77,60 @@ export function useAddProduct() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["allProducts"] });
       qc.invalidateQueries({ queryKey: ["activeProducts"] });
+    },
+  });
+}
+
+export function useAllComplaints() {
+  const { actor, isFetching } = useActor();
+  return useQuery<Complaint[]>({
+    queryKey: ["allComplaints"],
+    queryFn: async () => {
+      if (!actor) return [];
+      return (actor as any).getAllComplaints();
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useSubmitComplaint() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      name,
+      subject,
+      message,
+    }: {
+      name: string;
+      subject: string;
+      message: string;
+    }) => {
+      if (!actor) throw new Error("No actor");
+      return (actor as any).submitComplaint(name, subject, message);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["allComplaints"] });
+    },
+  });
+}
+
+export function useReplyToComplaint() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      reply,
+    }: {
+      id: bigint;
+      reply: string;
+    }) => {
+      if (!actor) throw new Error("No actor");
+      return (actor as any).replyToComplaint(id, reply);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["allComplaints"] });
     },
   });
 }

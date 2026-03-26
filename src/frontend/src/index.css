@@ -1304,3 +1304,176 @@
   animation-delay: 1s;
   border-color: rgba(255, 215, 0, 0.5);
 }
+
+/* ===== SHOCKWAVE ON MOUNT ===== */
+@keyframes shockwaveExpand {
+  0% {
+    transform: scale(0);
+    opacity: 1;
+    box-shadow: 0 0 0px rgba(204, 0, 0, 0.9);
+  }
+  60% {
+    opacity: 0.7;
+    box-shadow: 0 0 40px rgba(204, 0, 0, 0.4);
+  }
+  100% {
+    transform: scale(12);
+    opacity: 0;
+    box-shadow: 0 0 0px rgba(204, 0, 0, 0);
+  }
+}
+
+/* ===== GLITCH TEXT EFFECT ===== */
+@keyframes glitch {
+  0%,
+  100% {
+    clip-path: inset(0 0 100% 0);
+    transform: skew(0deg);
+  }
+  5% {
+    clip-path: inset(20% 0 60% 0);
+    transform: skew(-2deg) translateX(-3px);
+  }
+  10% {
+    clip-path: inset(50% 0 30% 0);
+    transform: skew(2deg) translateX(3px);
+  }
+  15% {
+    clip-path: inset(80% 0 5% 0);
+    transform: skew(-1deg) translateX(-2px);
+  }
+  20% {
+    clip-path: inset(0 0 100% 0);
+    transform: skew(0deg);
+  }
+}
+
+.goku-glitch {
+  position: relative;
+}
+.goku-glitch::before,
+.goku-glitch::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.goku-glitch::before {
+  color: #ff0000;
+  animation: glitch 4s infinite step-start;
+  animation-delay: 0.5s;
+  clip-path: inset(0 0 100% 0);
+  mix-blend-mode: screen;
+}
+.goku-glitch::after {
+  color: #ff6600;
+  animation: glitch 4s infinite step-start;
+  animation-delay: 1.2s;
+  clip-path: inset(0 0 100% 0);
+  mix-blend-mode: screen;
+  transform: translateX(2px);
+}
+
+/* ===== 3D DRAGON BALL SPHERE ===== */
+@keyframes dragonBallSpin {
+  0% {
+    transform: rotateX(0deg) rotateY(0deg);
+  }
+  100% {
+    transform: rotateX(360deg) rotateY(360deg);
+  }
+}
+
+.dragon-ball-3d {
+  width: 80px;
+  height: 80px;
+  position: relative;
+  transform-style: preserve-3d;
+  animation: dragonBallSpin 8s linear infinite;
+  perspective: 400px;
+}
+
+.dragon-ball-3d-inner {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 35% 35%,
+    #ffdd00,
+    #ff8800 45%,
+    #cc4400 80%,
+    #330000 100%
+  );
+  box-shadow:
+    0 0 20px rgba(255, 150, 0, 0.8),
+    0 0 40px rgba(255, 100, 0, 0.4),
+    inset -8px -8px 20px rgba(0, 0, 0, 0.5),
+    inset 4px 4px 12px rgba(255, 255, 200, 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+.dragon-ball-3d-inner::before {
+  content: "★";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 28px;
+  color: rgba(255, 50, 0, 0.9);
+  text-shadow: 0 0 8px rgba(255, 0, 0, 0.8);
+}
+
+/* ===== BACKGROUND AURORA ===== */
+@keyframes auroraShift {
+  0% {
+    background-position: 0% 50%;
+    opacity: 0.35;
+  }
+  50% {
+    background-position: 100% 50%;
+    opacity: 0.55;
+  }
+  100% {
+    background-position: 0% 50%;
+    opacity: 0.35;
+  }
+}
+
+.aurora-bg {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(
+      ellipse 80% 60% at 20% 30%,
+      rgba(150, 0, 0, 0.25),
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 60% 80% at 80% 70%,
+      rgba(80, 0, 0, 0.3),
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 100% 40% at 50% 10%,
+      rgba(200, 0, 0, 0.15),
+      transparent 80%
+    );
+  background-size: 200% 200%;
+  animation: auroraShift 8s ease-in-out infinite;
+}
+
+/* ===== DRAGON AURA BODY CLASS ===== */
+body.dragon-aura-active::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  box-shadow: inset 0 0 120px rgba(255, 0, 0, 0.15);
+  animation: auroraShift 3s ease-in-out infinite;
+}
